@@ -69,7 +69,7 @@ jnigen {
         outputPath = file("src/main/java/")
         basePackage = "games.rednblack.miniaudio.internal"
         fileToParse = "gdx-miniaudio.h"
-        options = ["-I${file("jni").absolutePath}"]
+        options = ["-I${file("jni").absolutePath}", "-D__JNIGEN_GENERATOR__"]
     }
 
     all {

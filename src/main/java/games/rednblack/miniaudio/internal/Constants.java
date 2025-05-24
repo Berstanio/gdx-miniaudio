@@ -43,4 +43,6 @@ public final class Constants {
     public static final byte MA_VERSION_REVISION = 22;
 
     public static final byte __GCC_HAVE_DWARF2_CFI_ASM = 1;
+
+    public static final byte __JNIGEN_GENERATOR__ = 1;
 }
