@@ -2,11 +2,22 @@ package games.rednblack.miniaudio;
 
 import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.jnigen.runtime.pointer.PointerDereferenceSupplier;
+import com.badlogic.gdx.jnigen.runtime.pointer.PointerPointer;
+import com.badlogic.gdx.jnigen.runtime.pointer.Pointing;
+import com.badlogic.gdx.jnigen.runtime.pointer.integer.UIntPointer;
 import com.badlogic.gdx.utils.Disposable;
 import com.badlogic.gdx.utils.Null;
 import com.badlogic.gdx.utils.SharedLibraryLoader;
+import games.rednblack.miniaudio.MADeviceInfo.MADeviceNativeDataFormat;
 import games.rednblack.miniaudio.config.MAContextConfiguration;
 import games.rednblack.miniaudio.config.MAEngineConfiguration;
+import games.rednblack.miniaudio.internal.GdxMiniaudio;
+import games.rednblack.miniaudio.internal.enums.ma_device_type;
+import games.rednblack.miniaudio.internal.enums.ma_result;
+import games.rednblack.miniaudio.internal.structs.ma_context;
+import games.rednblack.miniaudio.internal.structs.ma_device_info;
+import games.rednblack.miniaudio.internal.structs.ma_device_info.ma_device_infoPointer;
 
 /**
  * Main Audio Engine interface that handle calls with native library.
@@ -326,8 +337,77 @@ public class MiniAudio implements Disposable {
      * @return array of devices information
      */
     public MADeviceInfo[] enumerateDevices() {
-        return jniEnumerateDevices(MADeviceInfo.class, MADeviceInfo.MADeviceNativeDataFormat.class);
+        PointerPointer<ma_device_info.ma_device_infoPointer> ppPlaybackInfos = new PointerPointer<>(ma_device_infoPointer::new);
+        UIntPointer pPlaybackCount = new UIntPointer();
+        PointerPointer<ma_device_info.ma_device_infoPointer> ppCaptureInfos = new PointerPointer<>(ma_device_infoPointer::new);
+        UIntPointer pCaptureCount = new UIntPointer();
+        ma_context context = new ma_context(getContextAddress(), false);
+        ma_result res = GdxMiniaudio.ma_context_get_devices(context.asPointer(), ppPlaybackInfos, pPlaybackCount, ppCaptureInfos, pCaptureCount);
+        if (res != ma_result.MA_SUCCESS)
+            return null;
+
+        ma_device_info.ma_device_infoPointer pPlaybackInfos = ppPlaybackInfos.getValue();
+        int playbackCount = Math.toIntExact(pPlaybackCount.getUInt());
+        ma_device_info.ma_device_infoPointer pCaptureInfos = ppCaptureInfos.getValue();
+        int captureCount = Math.toIntExact(pCaptureCount.getUInt());
+
+
+        MADeviceInfo[] infos = new MADeviceInfo[playbackCount + captureCount];
+        for (int i = 0; i < playbackCount + captureCount; i++) {
+            boolean isCapture = i >= playbackCount;
+
+            ma_device_info info = isCapture ? pCaptureInfos.asStackElement(i) : pPlaybackInfos.asStackElement(i);
+            MADeviceInfo javaInfo = new MADeviceInfo();
+            ma_device_type type = isCapture ? ma_device_type.ma_device_type_capture : ma_device_type.ma_device_type_playback;
+            GdxMiniaudio.ma_context_get_device_info(context.asPointer(), type, info.id().asPointer(), info.asPointer());
+            javaInfo.isCapture = isCapture;
+            javaInfo.idAddress = info.id().getPointer();
+            javaInfo.isDefault = info.isDefault() != 0;
+            javaInfo.name = info.name().getString();
+
+            MADeviceNativeDataFormat[] formats = new MADeviceNativeDataFormat[Math.toIntExact(info.nativeDataFormatCount())];
+            for (int j = 0; j < formats.length; j++) {
+                ma_device_info.nativeDataFormats format = info.nativeDataFormats().asStackElement(j);
+                MADeviceNativeDataFormat javaFormat = new MADeviceNativeDataFormat();
+                switch (format.format()) {
+                case ma_format_unknown:
+                    javaFormat.format = MAFormatType.UNKNOWN;
+                    break;
+                case ma_format_u8:
+                    javaFormat.format = MAFormatType.U8;
+                    break;
+                case ma_format_s16:
+                    javaFormat.format = MAFormatType.S16;
+                    break;
+                case ma_format_s24:
+                    javaFormat.format = MAFormatType.S24;
+                    break;
+                case ma_format_s32:
+                    javaFormat.format = MAFormatType.S32;
+                    break;
+                case ma_format_f32:
+                    javaFormat.format = MAFormatType.F32;
+                    break;
+                case ma_format_count:
+                default:
+                    throw new IllegalStateException("Unhandled format");
+                }
+
+                javaFormat.channels = Math.toIntExact(format.channels());
+                javaFormat.sampleRate = Math.toIntExact(format.sampleRate());
+                javaFormat.flags = Math.toIntExact(format.flags());
+
+                formats[j] = javaFormat;
+            }
+            javaInfo.nativeDataFormats = formats;
+            infos[i] = javaInfo;
+        }
+        return infos;
     }
+
+    private native long getContextAddress();/*
+        return (jlong)&context;
+    */
 
     private native MADeviceInfo[] jniEnumerateDevices(Class infoClass, Class nativeFormatClass);/*
         ma_device_info* pPlaybackInfos;
