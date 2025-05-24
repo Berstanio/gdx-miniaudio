@@ -16,6 +16,7 @@ dependencies {
     implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
     implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
     //implementation "games.rednblack.miniaudio:miniaudio:$miniaudioVersion:natives-desktop"
+    implementation(rootProject.files("build/jnigen/libs/gdx-miniaudio-natives-desktop.jar"))
 
     implementation project(":")
 
